@@ -1,0 +1,24 @@
+#!/sbin/openrc-run
+# NetBird 首次开机接入服务（Alpine / OpenRC，一次性）
+# 由 reinstall.sh 的 --setup-key 注入；联网成功后自移除，失败则保留供下次开机重试
+
+description="NetBird first-boot setup (install and join)"
+
+depend() {
+    need net
+    after firewall
+}
+
+start() {
+    ebegin "NetBird setup"
+    ash /usr/local/bin/netbird-setup.sh
+    eend $?
+}
+
+start_post() {
+    # 仅在已连接时自移除；未连接则保留以便下次开机重试
+    if netbird status 2>/dev/null | grep -q 'Management: Connected'; then
+        rc-update del netbird-setup default 2>/dev/null
+        rm -f /etc/init.d/netbird-setup
+    fi
+}

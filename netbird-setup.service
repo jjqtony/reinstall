@@ -1,0 +1,16 @@
+# NetBird 首次开机接入服务（一次性）
+# 由 reinstall.sh 的 --setup-key 注入，联网成功后 netbird-setup.sh 会自禁用本服务
+
+[Unit]
+Description=NetBird first-boot setup (install and join)
+After=network-online.target
+Wants=network-online.target
+# 没有 key 文件（未配置或已完成）时不运行
+ConditionPathExists=/etc/netbird-setup/setup-key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/netbird-setup.sh
+
+[Install]
+WantedBy=multi-user.target

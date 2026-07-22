@@ -6,9 +6,9 @@
 # alpine 默认没有 bash，因此 shebang 用 sh，再 exec 切换到 bash
 
 set -eE
-confhome=https://raw.githubusercontent.com/bin456789/reinstall/main
-confhome_cn=https://cnb.cool/bin456789/reinstall/-/git/raw/main
-# confhome_cn=https://www.ghproxy.cc/https://raw.githubusercontent.com/bin456789/reinstall/main
+confhome=https://raw.githubusercontent.com/jjqtony/reinstall/main
+confhome_cn=https://p8.88332211.xyz/https://raw.githubusercontent.com/jjqtony/reinstall/main
+# confhome_cn=https://www.ghproxy.cc/https://raw.githubusercontent.com/jjqtony/reinstall/main
 
 # 用于判断 reinstall.sh 和 trans.sh 是否兼容
 SCRIPT_VERSION=4BACD833-A585-23BA-6CBB-9AA4E08E0004
@@ -110,12 +110,15 @@ Usage: $reinstall_____ anolis      7|8|23
                        [--web-port    PORT]
                        [--frpc-config PATH]
 
+                       For Linux Only:
+                       [--setup-key   KEY]
+
                        For Windows Only:
                        [--allow-ping]
                        [--rdp-port    PORT]
                        [--add-driver  INF_OR_DIR]
 
-Manual: https://github.com/bin456789/reinstall
+Manual: https://github.com/jjqtony/reinstall
 
 EOF
     exit 1
@@ -3593,6 +3596,10 @@ EOF
         curl -LO "$confhome/get-frpc-url.sh"
         curl -LO "$confhome/frpc.service"
     fi
+    if [ -n "$netbird_setup_key" ]; then
+        curl -LO "$confhome/netbird-setup.sh"
+        curl -LO "$confhome/netbird-setup.service"
+    fi
 
     # 可以节省一点内存？
     echo 'export DEBCONF_DROP_TRANSLATIONS=1' |
@@ -4014,6 +4021,11 @@ This script is outdated, please download reinstall.sh again.
     fi
     if [ -n "$frpc_config" ]; then
         cat "$frpc_config" >$initrd_dir/configs/frpc.conf
+    fi
+    if [ -n "$netbird_setup_key" ]; then
+        # 用 printf 避免尾部换行；权限 600，key 为敏感信息
+        printf '%s' "$netbird_setup_key" >$initrd_dir/configs/netbird-setup-key
+        chmod 600 $initrd_dir/configs/netbird-setup-key
     fi
 
     # 收集 cloud-data 打包进 initrd
@@ -4489,6 +4501,7 @@ for o in ci installer debug minimal allow-ping force-cn help \
     allow-ping: \
     commit: \
     frpc-conf: frpc-config: \
+    setup-key: \
     target-disk: \
     force-boot-mode: \
     force-old-windows-setup:; do
@@ -4606,6 +4619,11 @@ while true; do
         # 转为绝对路径
         frpc_config=$(readlink -f "$frpc_config")
 
+        shift 2
+        ;;
+    --setup-key)
+        [ -n "$2" ] || error_and_exit "Need value for $1"
+        netbird_setup_key=$2
         shift 2
         ;;
     --force-boot-mode)
@@ -4795,6 +4813,19 @@ done
 
 # 检查必须的参数
 verify_os_args
+
+# NetBird（--setup-key）仅支持 Linux 宿主与 Linux 目标系统
+# 宿主为 Windows，或目标为 Windows/DD/netboot.xyz/reset/NixOS 时，给出提示并退出
+if [ -n "$netbird_setup_key" ]; then
+    if is_in_windows; then
+        error_and_exit "--setup-key (NetBird) only works on a Linux host, but the current environment is Windows"
+    fi
+    case "$distro" in
+    windows | dd | netboot.xyz | reset | nixos)
+        error_and_exit "--setup-key (NetBird) only supports Linux target systems, not: $distro"
+        ;;
+    esac
+fi
 
 # 用户名
 if ! is_netboot_xyz && [ -z "$username" ]; then

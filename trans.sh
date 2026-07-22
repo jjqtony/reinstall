@@ -1712,6 +1712,19 @@ install_alpine() {
         cp -f /configs/frpc.* /os/etc/frp/
     fi
 
+    # netbird（--setup-key）：首启动时安装 netbird 并 netbird up
+    if [ -f /configs/netbird-setup-key ]; then
+        mkdir -p /os/usr/local/bin /os/etc/netbird-setup
+        download "$confhome/netbird-setup.sh" /os/usr/local/bin/netbird-setup.sh
+        chmod a+x /os/usr/local/bin/netbird-setup.sh
+        cp -f /configs/netbird-setup-key /os/etc/netbird-setup/setup-key
+        chmod 600 /os/etc/netbird-setup/setup-key
+        # OpenRC 一次性服务，放在 default 运行级（需要 net 已就绪）
+        download "$confhome/netbird-setup.initd" /os/etc/init.d/netbird-setup
+        chmod +x /os/etc/init.d/netbird-setup
+        chroot /os rc-update add netbird-setup default
+    fi
+
     # setup-disk 会自动选择固件，但不包括微码？
     # https://github.com/alpinelinux/alpine-conf/blob/3.18.1/setup-disk.in#L421
     if fw_pkgs="$fw_pkgs $(get_ucode_firmware_pkgs)" && [ -n "$fw_pkgs" ]; then
@@ -2195,6 +2208,26 @@ add_frpc_systemd_service_if_need() {
     fi
 }
 
+add_netbird_setup_service_if_need() {
+    local os_dir=$1
+
+    if [ -f /configs/netbird-setup-key ]; then
+        mkdir -p "$os_dir/usr/local/bin"
+        mkdir -p "$os_dir/etc/netbird-setup"
+
+        # 首启脚本：目标系统首次开机时安装 netbird 并 netbird up
+        download "$confhome/netbird-setup.sh" "$os_dir/usr/local/bin/netbird-setup.sh"
+        chmod a+x "$os_dir/usr/local/bin/netbird-setup.sh"
+
+        # setup key（敏感信息，权限 600）
+        cp -f /configs/netbird-setup-key "$os_dir/etc/netbird-setup/setup-key"
+        chmod 600 "$os_dir/etc/netbird-setup/setup-key"
+
+        # 添加 systemd 一次性服务（download .service + enable + preset）
+        add_systemd_service "$os_dir" netbird-setup
+    fi
+}
+
 get_fs_of_mount_point() {
     local mount_point=$1
 
@@ -2267,6 +2300,9 @@ basic_init() {
 
     # frpc
     add_frpc_systemd_service_if_need $os_dir
+
+    # netbird（--setup-key）
+    add_netbird_setup_service_if_need $os_dir
 }
 
 install_arch_gentoo_aosc() {
@@ -5190,6 +5226,9 @@ install_fnos() {
 
     # frpc
     add_frpc_systemd_service_if_need $os_dir
+
+    # netbird（--setup-key）
+    add_netbird_setup_service_if_need $os_dir
 }
 
 install_qcow_by_copy() {
